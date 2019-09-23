@@ -1,51 +1,5 @@
 Author: Juan Becerra (juanbecerra@u.boisestate.edu)
 Course: CS 464: Introduction to Computer Graphics
+Assignment: A2 - Modeling
 Instructor: Steve Cutchin
 
-# Submission files
-
-- img {
-    - box.png
-    - checker.jpg (new)
-    - xor.gif (new)
-    - tjslacia.png (new)
-}
-- shader_proof {
-    - blue.png
-    - green.png
-    - red.png
-}
-- glMatrix_util.js
-- hellowebgl_textures.html (modified)
-- hellowebgl.html
-- README (new)
-- webgl-utils.js
-
-# Discovery
-
-While this isn't my first time experimenting with 3D graphics as I've used programs like Unreal Engine, Unity, and Blender, 
-this is my first time being exposed to the underlying code/logic through WebGL. Overall, I thought it was very interesting to 
-see all of the methods used in rendering 3D objects, even if much of the complicated math and pipelines are abstracted away 
-(thankfully).
-
-I did cheat a bit with the "Rotate the Cube Object" task as I still had the previous file before it was updated. Still, I made 
-sure to view and understand the underlying logic behind the x, y, and x Rot variables and their respective modifiers. The mat4 
-transformation functions accept the mvMatrix, a radian value, and some sort of dimensional operator [x, y, z]. animate() then 
-rotates based off of a integer, lastTime, which is assigned based on the current time. It is then called every frame and adds 
-to its own rotational value indefinately.
-
-I took a fairly simple route with "Replace the Cube Object" as I just removed a face. Under initGeometry(), I commented out the 
-code specifying the front face vertices and texture maps. The result is a box that allows you to view the unculled textures from 
-the inside of the box.
-
-For "Texture Images", I created a block of code that swaps out the cube's exTexture image based on a grame counter in Frames(). 
-Essentially, exTextures.image.src will swap the image reference every time the cube completes a 360 degree rotation.
-
-For "Shader Coloring", I simply took the line of code that sets the gl_FragColor to a 2D texture and swapped it to three different 
-vec4's, one that's red, green, and blue (all fully opaque). The proof for these changes can be found in the folder "shader_proof". 
-
-# Extra Credit
-
-The "Incorperate other primatives" section was attempted, but I wasn't sure how to exaactly implemented. I tried to add a second cube 
-to the scene (same vertices as the given cube, but all divided by two), but it only rendered the smaller cube. The code for the second 
-cube is still in, but commented out.
