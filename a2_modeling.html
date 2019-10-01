@@ -14,19 +14,13 @@
     precision mediump float;
 
     varying vec2 vTextureCoord;
-    varying vec3 vNormals;
+    varying vec3 vLightWeighting;
 
     uniform sampler2D uSampler;
-    uniform vec3 uReverseLightDirection;
-    uniform vec4 uColor;
 
     void main(void) {
-        vec3 normal = normalize(vNormals);
-
-        float light = dot(normal, uReverseLightDirection);
-
+        vec4 tx_FragColor = texture2D(uSampler, vec2(vTextureCoord.s, vTextureCoord.t));
         gl_FragColor = texture2D(uSampler, vec2(vTextureCoord.s, vTextureCoord.t));
-        //gl_FragColor.rgb *= light;
     }
 </script>
 
@@ -41,15 +35,34 @@
 
     varying vec2 vTextureCoord;
     varying vec3 vNormals;
+    varying vec3 nVertexPosition;
+    uniform sampler2D uSampler;
+    varying vec4 clrVec;
+    varying vec4 nclrVec;
 
+    uniform mat3 uNMatrix;
+    uniform vec3 uAmbientColor;  // ambient light
+    uniform vec3 uLightingDirection; // directional light
+    uniform vec3 uDirectionalColor; // color of directional light
+    varying vec3 vLightWeighting;
 
     void main(void) {
-        gl_Position = uPMatrix * uMVMatrix * u_xformMatrix * vec4(aVertexPosition, 1.0);
+        // modify the height of the terrain 
+        nVertexPosition[0] = aVertexPosition[0];
+        nVertexPosition[1] = 0.5;
+        nVertexPosition[2] = aVertexPosition[2];
         vTextureCoord = aTextureCoord;
-        vNormals = aNormals;
+        clrVec = texture2D(uSampler,vTextureCoord);
+        nclrVec = normalize(clrVec);
+        nVertexPosition[1] = sqrt(nclrVec[0]*nclrVec[0] + nclrVec[1]*nclrVec[1]+nclrVec[2]*nclrVec[2]);
+        gl_Position = uPMatrix * uMVMatrix * u_xformMatrix * vec4(nVertexPosition, 1.0);
+       
+        // here we calculate the lighting information from vertex.
+        vec3 testNormal = aNormals;
+        float directionalLightWeighting = max(dot(testNormal, uLightingDirection), 0.0);
+        vLightWeighting = uAmbientColor + uDirectionalColor * directionalLightWeighting;
     }
 </script>
-
 	
 <script> //<!-- define Javascript functions for drawing WebGL items -->
 
@@ -139,15 +152,21 @@ function initShaders() {
     shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition");
     gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
 
-    shaderProgram.vertexNormalBuffer = gl.getAttribLocation(shaderProgram, "aNormals");
+    shaderProgram.vertexNormalBuffer = gl.getAttribLocation(shaderProgram, "aVertexNormals");
     gl.enableVertexAttribArray(shaderProgram.vertexNormalBuffer);
 
-   shaderProgram.textureCoordAttribute = gl.getAttribLocation(shaderProgram, "aTextureCoord");
-   gl.enableVertexAttribArray(shaderProgram.textureCoordAttribute);
+    shaderProgram.textureCoordAttribute = gl.getAttribLocation(shaderProgram, "aTextureCoord");
+    gl.enableVertexAttribArray(shaderProgram.textureCoordAttribute);
 
     shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
     shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
     shaderProgram.samplerUniform = gl.getUniformLocation(shaderProgram, "uSampler");
+
+    shaderProgram.tnMatrixUniform = gl.getUniformLocation(shaderProgram, "uNMatrix");
+    shaderProgram.useLightingUniform = gl.getUniformLocation(shaderProgram, "uUseLighting");
+    shaderProgram.ambientColorUniform = gl.getUniformLocation(shaderProgram, "uAmbientColor");
+    shaderProgram.lightingDirectionUniform = gl.getUniformLocation(shaderProgram, "uLightingDirection");
+    shaderProgram.directionalColorUniform = gl.getUniformLocation(shaderProgram, "uDirectionalColor");
 }
 
 // create our basic model and view matrix
@@ -184,11 +203,14 @@ function setMatrixUniforms() {
     var reverseLightDirectionLocation = gl.getUniformLocation(shaderProgram, "u_reverseLightDirection");
 
     gl.uniformMatrix4fv(u_xformMatrix, false, xformMatrix);
-    gl.uniform4fv(colorLocation, [0.2, 1, 0.2, 1]);   //  green
-    gl.uniform3fv(reverseLightDirectionLocation, new Float32Array([0.5, 0.7, 1]));
-
+    
     gl.uniformMatrix4fv(shaderProgram.pMatrixUniform, false, pMatrix);
     gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, mvMatrix);
+
+    var normalMatrix = mat3.create();
+    mat4.toInverseMat3(mvMatrix, normalMatrix);
+    mat3.transpose(normalMatrix);
+    gl.uniformMatrix3fv(shaderProgram.tnMatrixUniform, false, normalMatrix);
 }
 
 function initGeometry() {
@@ -274,8 +296,6 @@ function initGeometry() {
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(triangles), gl.STATIC_DRAW);
     VertexIndexBuffer.itemSize = 1;
     VertexIndexBuffer.numItems = faceCount;
-
-
 }
 
 
@@ -326,7 +346,7 @@ function startHelloWebGL() {
 // then we define our View positions for our camera using WebGL matrices.
 // OpenGL has convenience methods for this such as glPerspective().
 // finally we call the gl draw methods to draw our defined geometry objects.
-var xRot = 30;
+var xRot = 20;
 var yRot = 0;
 var zRot = 0;
 
@@ -339,7 +359,7 @@ function drawScene() {
 
     mat4.identity(mvMatrix);   
 
-    mat4.translate(mvMatrix, [0.0, -1.5, -20.0]); // Move the scene back away from us
+    mat4.translate(mvMatrix, [0.0, -1.5, -30.0]); // Move the scene back away from us
 
     //  Rotate around X, Y, and Z matrix
     mat4.rotate(mvMatrix, xRot/180.0*3.1415, [1, 0, 0]);
@@ -362,21 +382,21 @@ function drawScene() {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, exTexture);
     gl.uniform1i(shaderProgram.samplerUniform, 0);
+    gl.uniform1i(shaderProgram.useLightingUniform, true);
+
+    // Determine lighting
+    gl.uniform3f(shaderProgram.ambientColorUniform, 1.0, 0.0, 0.0);
+    var lightingDirection = [0.0, -1.0, 0.0];
+    var adjustedLD = vec3.create();
+    vec3.normalize(lightingDirection, adjustedLD);
+    vec3.scale(adjustedLD, -1);
+    gl.uniform3fv(shaderProgram.lightingDirectionUniform, adjustedLD);
+    gl.uniform3f(shaderProgram.directionalColorUniform, 1.0, 0.0, 0.0);
 
     // Binds vertex index
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, VertexIndexBuffer);
     setMatrixUniforms();
     gl.drawElements(gl.TRIANGLES, VertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);    // Actually draws triangles on GPU
-}
-
-function resizeCanvas() {
-    var width = canvas.clientWidth;
-    var height = canvas.clientHeight;
-    if(canvas.width != width || canvas.height != height) {
-        canvas.width = width;
-        canvas.height = height;
-        drawScene();
-    }
 }
 
 var lastTime = 0;
